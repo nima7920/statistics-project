@@ -1,0 +1,470 @@
+---
+title: "  "
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<h2 align="center"> Statistics Course Project : Part 1 </h2>
+<h3 align="center"> Nima Alizadeh </h3>
+<h4 align="center"> 98100504 </h4>
+### Problem 1
+<h3> a
+</h3>
+Distribution selected for this problem is exponential distribution. 
+<ol>
+<li>
+The cumulative distribution plot for exponential random variable is as follow :
+```{r}
+curve(dexp,from=0,to=10)
+```
+
+<li>
+Variable `data_rate` is the parameter of exponential distribution.
+Generating first set of samples:
+```{r}
+data_rate=1
+data1=rexp(500,rate=data_rate)
+matrix1 <- matrix(data1,nrow=50,ncol=10)
+means1=apply(matrix1,2,mean)
+hist(means1)
+```
+
+Generating second set of samples:
+```{r}
+data2=rexp(5000,rate=data_rate)
+matrix2 <- matrix(data2,nrow=50,ncol=100)
+means2=apply(matrix2,2,mean)
+hist(means2)
+```
+
+Generating third set of samples:
+```{r}
+data3=rexp(50000,rate=data_rate)
+matrix3 <- matrix(data3,nrow=50,ncol=1000)
+means3=apply(matrix3,2,mean)
+hist(means3)
+```
+
+<li>
+Computing mean and variance of means in each sample set:
+
+```{r}
+means=c(mean(means1),mean(means2),mean(means3))
+print(paste("means are:",means))
+```
+```{r}
+vars=c(var(means1),var(means2),var(means3))
+print(paste("variance of means  are:",vars))
+
+```
+
+Normalizing means for each sample set and comparing them with normal distribution.
+First set:
+```{r}
+means1_normal=(means1-means[1])/(sqrt(vars[1]))
+hist(means1_normal, freq=FALSE)
+curve(dnorm, col="darkblue", lwd=2, add=TRUE, yaxt="n")
+
+```
+
+Second set:
+
+```{r}
+means2_normal=(means2-means[2])/(sqrt(vars[2]))
+hist(means2_normal,freq=FALSE)
+curve(dnorm, col="darkblue", lwd=2, add=TRUE, yaxt="n")
+```
+
+Third set:
+```{r}
+means3_normal=(means3-means[3])/(sqrt(vars[3]))
+hist(means3_normal,freq=FALSE)
+curve(dnorm, col="darkblue", lwd=2, add=TRUE, yaxt="n")
+```
+
+As it can be seen in the figures, by increasing the number of samples, we get a distribution which is more similar the normal distribution. Central Limit theorem also confirms this fact, since by increasing the number of samples from a random variable, the distribution of the mean of the samples gets more close to normal.
+
+</ol>
+
+<h3> b </h3>
+
+
+<ol>
+<li>
+Importing dataset and computing the number of births in each day: 
+```{r}
+library(fastR2)
+daily_means=c(mean(Births$births[Births$day_of_year==1]))
+for(i in 2:365){
+  daily_means=c(daily_means,mean(Births$births[Births$day_of_year==i]))
+}
+print(paste("maximum number of births happened in" ,which.max(daily_means),"th day of each year, in average"))
+print(paste("minimum number of births happened in" ,which.min(daily_means),"th day of each year, in average"))
+```
+
+<li>
+Computing average number of births in each month:
+```{r}
+monthly_means=c(mean(Births$births[Births$month==1]))
+for(i in 2:12){
+  monthly_means=c(monthly_means,mean(Births$births[Births$month==i]))
+}
+print(paste("Average number of births in each month ( from Jan to Dec) is "))
+monthly_means
+print(paste("Order of months, based on the number of births in acsending order is "))
+rev(order(monthly_means))
+```
+<li>
+Computing average number of births in each year:
+```{r}
+yearly_means=c(mean(Births$births[Births$year==1969]))
+for(i in 1970:1988){
+  yearly_means=c(yearly_means,mean(Births$births[Births$year==i]))
+}
+yearly_means
+df_year <- data.frame(years=1969:1988,values=yearly_means)
+ggplot(data=df_year,aes(x=years,y=values))+geom_bar(stat = "identity")
+
+```
+
+
+</ol>
+
+<h3> c </h3>
+Importing dataset and loading required data from it: 
+```{r}
+library(dplyr)
+#View(storms[order(storms$),])
+sorted_storms=storms[with(storms,order(storms$year,storms$month,storms$day,storms$hour)),]
+write.table(sorted_storms,file="sorted storsm.RData") # saving sorted data
+```
+Plotting points:
+```{r}
+# plotting points 
+#p=ggplot(data=sorted_storms)+geom_point(aes(long,lat))
+#p
+ggplot(data = sorted_storms)+geom_point(mapping = aes(x=long,y=lat, color=status))
+
+```
+
+### Problem 2
+
+<h3> a</h3>
+Reading data from file:
+```{r}
+# reading data from file
+heart_data=read.delim("had.txt",header=FALSE)
+```
+
+<ol>
+<li>
+Seprating labels and features
+```{r}
+# seprating labels and features
+label=heart_data[,7]
+features=heart_data[,1:6]
+```
+
+<li>
+Dividing data to train and test parts
+```{r}
+# dividing data to train and test parts
+train_indices=sample(nrow(heart_data),240)
+train_labels=label[train_indices]
+train_features=features[train_indices,]
+test_labels=label[-train_indices]
+test_features=features[-train_indices,]
+# saving tables
+write.table(train_labels,file="train labels.txt")
+write.table(train_features,file="train features.txt")
+write.table(test_labels,file="test labels.txt")
+write.table(test_features,file="test features.txt")
+
+```
+
+</ol>
+
+<h3> b</h3>
+
+<ol>
+
+<li>
+Applying linear regression on training samples:
+```{r}
+# regression on training samples 
+regression_data=lm(train_labels~V1+V2+V3+V4+V5+V6,data=train_features)
+
+summary(regression_data)
+```
+
+In addition to regression coefficients, summary function also contains data about standard error, t-value , F-statistics, p-value and etc. as well.
+Standard error for each coefficient gives us a confidence interval for the actual regression coefficient, over the computed coefficient.
+T value for eahc coefficient is  the ratio of the coefficient and standard error.
+Probability $\Pr\{>|t|\}$ gives the p-value, calculated from t-statistics of the coefficient, showing how significant the coefficient is.
+Residual standard error is the total error we have on our regression line.
+
+<li>
+
+Maximum and minimum coefficients are :
+```{r}
+which.max(regression_data$coefficients)
+which.min(regression_data$coefficients)
+```
+This way of comparing coefficients is not correct, since features don't have the same scale. To make this comparison meaningful, we should first normalize the features into the same scale, and then compute regression coefficients.
+
+</ol>
+
+<h3> c</h3>
+
+First we define a function to apply regression coefficients on a given test dataset: 
+
+```{r}
+apply_regression <- function(coeffs,test_data,dims){
+  result=matrix(coeffs[1],nrow=dims[1],ncol=dims[2]+1)
+  
+  for(i in 1:dims[2]){
+  result[,i+1]=coeffs[i+1]*test_features[,i]
+  }
+
+ result=rowSums(result)
+}
+```
+
+We also define another function for estimating labels by a limit :
+
+```{r}
+estimate_labels <- function(result,limit,dim){
+  labels=c(1:dim)
+  labels[result>=limit]=1
+  labels[result<limit]=-1
+  return(labels)
+  
+}
+```
+
+Another function for computing the ratio of the correct labels in estimated labels :
+
+```{r}
+find_corrects_ratio <- function(est_labels,labels,dims){
+  corrects=length(est_labels[est_labels==labels])
+  ratio=corrects/dims
+}
+```
+
+<ol>
+
+<li>
+Applying regression on test dataset:
+```{r}
+coeffs=regression_data$coefficients
+result=apply_regression(coeffs,test_features,c(63,6))
+estimates=estimate_labels(result,0,63)
+ratio=find_corrects_ratio(estimates,test_labels,63)
+print(paste("Ratio of correct estimates is:",ratio))
+
+```
+
+<li>
+We check the result of applying regression on test dataset for 50 different and uniform limits in [-2,2]
+
+```{r}
+# computing ratios for 20 different limits in [-2,2]
+limits=seq(-2,2,length=50)
+ratios=c()
+for(i in limits){
+  estimates=estimate_labels(result,i,63)
+  ratio=find_corrects_ratio(estimates,test_labels,63)
+  ratios=c(ratios,ratio)
+}
+print(paste("Maximum ratio is generated for limit ",limits[which.max(ratios)]))
+```
+
+```{r}
+# plotting ratios and limits 
+limits_ratios=data.frame(limits=limits,ratios=ratios)
+ggplot(data = limits_ratios)+geom_point(mapping = aes(x=limits,y=ratios))
+```
+
+</ol>
+
+### Problem 3
+
+<h3> a </h3>
+<ol>
+Importin data from file:
+```{r}
+# reading data from excel file
+library(readxl)
+housing_data=read_excel('housing.xlsx',sheet="price of land")
+```
+
+<li>
+We find broken samples by considering NAs and strings and numbers smaller than 10:
+```{r}
+# finding broken data in each column
+cleaned_data=housing_data
+cols=dim(housing_data)[2]
+num_of_brokens=c()
+for(i in 1:cols){
+  NAs=which(suppressWarnings(is.na(housing_data[,i])))
+  non_numbers=which(is.na(suppressWarnings(as.numeric(as.character(housing_data[,i])))))
+  mean_less=which(housing_data[,i]<10)
+  brokens=-1+length(non_numbers)+length(mean_less)+length(NAs)
+  num_of_brokens=c(num_of_brokens,brokens)
+  cleaned_data[NAs,i]=NA
+  cleaned_data[non_numbers,i]=NA
+  cleaned_data[mean_less,i]=NA
+  
+}
+print(paste("number of broken samples in each column is (from left to right)"))
+num_of_brokens
+```
+
+
+<li>
+
+We replace every element with a broken data in the table with a NA and remove all columns with at least 6 broken data :
+```{r}
+# removing columns with at least one broken value
+brokens=which(num_of_brokens>=6)
+cleaned_data=cleaned_data[,-brokens]
+cleaned_data=cleaned_data[-c(1),]
+
+```
+ Since the number of broken elements in the table is low, and there is no reason to replace them with any combination of the other elements in the same row or column ( that's because there is no obvious relation between numbers in the same row or column) hence,it makes sense to ignore them in regression analysis.
+ 
+<li>
+Writing cleaned dataset in excel file:
+```{r}
+library(writexl)
+write_xlsx(cleaned_data,"cleaned housing prices.xlsx")
+
+```
+
+</ol>
+
+<h3> b </h3>
+
+<ol>
+
+<li>
+A summary of the regression for 19th row (98100504 is congurent to 18 modulo 22) is as follow :
+```{r}
+k=98100504 %% 22
+district_k=as.numeric(cleaned_data[c(k+2),c(2:ncol(cleaned_data))])
+seasons=c(seq(from=38,to=1,by=-1))
+district_data=data.frame(x=seasons,y=district_k)
+#class(district_k)
+regression_k=lm(y~x,data = district_data)
+summary(regression_k)
+
+```
+
+Plot of regression line :
+
+```{r}
+
+plot(seasons, district_k, pch = 16, cex = 1.3, col = "blue", main = "Prices plotted against seasons", xlab = "Seasons", ylab = "Prices")
+abline(regression_k)
+
+```
+
+<li>
+Computing regression coefficients using all the data in the table :
+
+```{r}
+prices=as.numeric(unlist(cleaned_data[,c(2:38)]))
+districts=c()
+seasons_total=c()
+for(i in 1:37){
+  districts=c(districts,c(0:22)) # generating districts
+  seasons_total=c(seasons_total,rep(38-i,23)) # generating seasons
+}
+regression_total=lm(prices~districts+seasons_total)
+summary(regression_total)
+
+```
+
+<li>
+
+Computing regression coefficients using indicator variables for districts :
+```{r}
+district_names=c()
+for(i in 1:37){
+  district_names=c(district_names,c("dis0","dis1","dis2" ,"dis3", "dis4", "dis5", "dis6", "dis7", "dis8", "dis9","dis10", "dis11", "dis12" ,"dis13" ,"dis14" ,"dis15" ,"dis16", "dis17", "dis18", 0, "dis20" ,"dis21", "dis22"))
+}
+regression_indicator=lm(prices~district_names+seasons_total)
+summary(regression_indicator)
+```
+
+<li>
+#### Which of part ii or iii is better?
+Approach in part iii is better. In part ii, we assign each district a number ( for example 10 for district 10) which might be irrelevant to the price of that district, compared to other districts. Hence, this approach might result some errors. In the case of iii, we don't have this problem.
+Also, in part iii, residual standard error is 47870, which is smaller that ii case ( which is 51790), so this is another reason showing that method iii is better.
+
+</ol>
+
+<h3> c </h3>
+<ol>
+
+My student number is 98100504, which is congruent to 18 modulo 33, so we should take columns 15 and 16 in our current data frame:
+
+```{r}
+x=as.numeric(unlist(cleaned_data[c(1:23),c(16)]))
+y=as.numeric(unlist(cleaned_data[c(1:23),c(15)]))
+print("x :")
+x
+print("y :")
+y
+```
+
+<li>
+We compute the mean and variance of x and y :
+
+```{r}
+mean_x=mean(x)
+mean_y=mean(y)
+print(paste("mean of x:",mean_x))
+print(paste("mean of y:",mean_y))
+```
+```{r}
+var_x=var(x)
+var_y=var(y)
+print(paste("variance of x:",var_x))
+print(paste("variance of y:",var_y))
+```
+Now, we compute t-value for these means and compute p-value from it :
+
+```{r}
+n=length(x)
+sp=sqrt((var_x+var_y)/2)
+t=(mean_x-mean_y)/(sp*sqrt(2/n))
+p_value=2*pt(t,n-1,lower.tail = TRUE)
+print(paste("p value is: ",p_value))
+```
+Since p value is rather large ( much bigger than 0.05), so with the significance level of 0.05, we can't reject null hypothesis.
+
+<li>
+We first compute z, its mean, variance and corresponding p value :
+
+```{r}
+z=x-y
+mean_z=mean(z)
+var_z=var(z)
+print(paste("mean of z is :",mean_z))
+print(paste("variance of z is :",var_z))
+mean_z/sqrt(var_z/n)
+p_value_z=2*pt(mean_z/sqrt(var_z/n),n-1,lower.tail = TRUE)
+print(paste("p value for z is :",p_value_z))
+```
+p-value for z is also large, so again, we can't reject null hypothesis with significance level 0.05.
+
+<li> 
+#### Comparison between previous methods
+
+The second method ( pairing samples ) is better. When pairing, we consider samples from one district with each other, and this prevents some errors that be because of the differences between samples in different districts. 
+Also if we consider p-values computed in each method, p-value in first method is bigger than the p-value in the second method.
+
+</ol>
