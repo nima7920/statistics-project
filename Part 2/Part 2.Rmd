@@ -1,0 +1,219 @@
+---
+title: "Statistics Project Part 2"
+author: "Nima Alizadeh"
+date: "2/16/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(ggplot2)
+library(olsrr)
+library(set6)
+library(dplyr)
+```
+
+## Part 1: EDA
+
+We first load the data from file to a data frame 
+```{r}
+df <- read.csv(file='lyon_housing.csv')
+View(df)
+# previewing dataframe 
+glimpse(df)
+summary(df)
+
+```
+In the first step, we will get rid of NA cells and fix missing values:
+```{r}
+# detecting unusable data ( NAs)
+sprintf("there are %s NA cells", sum(is.na(df)))
+```
+As it can be seen in summary, there are a total of 14777 NA cells, 14491 of them being in `surface_effective_usable` column and 143 in each of latitude and longitude columns. 
+<h4>Fixing NA cells for `surface_effective_usable` column </h4>
+By viewing the dataset, it seems like data in columns `surface_effective_usable` and `surface_housing` are close to each other and maybe we can estimate missing values in `surface_effective_usable` by replacing corresponding value in `surface_housing`. Let $H_0$ be the null hypothesis, stating that random variable assigned to each of these columns are equal.
+```{r}
+# should be completed 
+t.test(df$surface_housing,df$surface_effective_usable,alternative = 'two.sided' , var_equal = False)
+
+```
+The true value of the difference of means of these columns is not zero, but since the confidence interval for the difference of means and its endpoints are small relative to the means, we can set each NA in `surface_effective_usable` with its corresponding value in `surface_housing` :
+```{r}
+df$surface_effective_usable <- ifelse(is.na(df$surface_effective_usable), df$surface_housing, df$surface_effective_usable)
+```
+<h4>Fixing NA cells for longitude and latitude columns </h4>
+For longitude and latitude, let's check whether NA cells in each column are also in the same row:
+```{r}
+lat_nas = which(is.na(df$latitude))
+
+long_nas = which(is.na(df$longitude)) 
+
+lat_nas == long_nas
+```
+So 143 rows of dataset don't have latitude and longitude. Since we have a total of 40516 rows, which is much large relative to 143, we remove these rows:
+```{r}
+df2 <- na.omit(df)
+```
+<h4>Fixing zero cells </h4>
+It can be seen from the dataset that most of the values in column `surface_terrain` is zero, which is not valid. In this step we take a look at all zero cells in the dataset ( percentage of zeros in each column ):
+```{r}
+zeros <- colSums(df2==0)/nrow(df2)*100
+zeros
+```
+More than 98 percent of cells in `surface_terrain` are zero ( hence invalid), so it makes sense to omit this column: 
+```{r}
+df3 <- df2 %>% select(-surface_terrain)
+```
+<h4>Fixing dates </h4>
+The type of dates in dataset is string. We will change it to date:
+```{r include=FALSE}
+df3$date_transaction <- as.Date(df3$date_transaction, format = '%y/%m/%d')
+```
+For construction date, there is an extra data for hour and minute, which is not really useful (we don't need to know the exact minute that the house was constructed!) so we will remove it and then convert the dates.First, let's see what different times have appeared in this column ( we will extract hour,minute and second of this column) 
+```{r}
+times = format(strptime(df[['date_construction']], "%Y/%m/%d %H:%M"), format = "%H:%M:%S")
+as.Set(times)
+```
+
+Only 00:00 and 11:38 has appeared in dataset, so we may just remove them:
+```{r}
+df3$date_construction <- gsub(x=df3$date_construction,pattern=" 0:00",replacement="",fixed=T)
+df3$date_construction <- gsub(x=df3$date_construction,pattern=" 11:38",replacement="",fixed=T)
+df3$date_construction <- as.Date(df3$date_construction, format = '%y/%m/%d')
+
+```
+<h3> Adding a new column for age </h3>
+We can add a column showing the age of each house, by finding the differenc between its construction date and current time :
+```{r}
+df3$age=Sys.Date()-df3$date_construction
+length(which(df3$age < 0))
+min(df3$age)
+```
+There are 19 negative fields in age column,minimum being -475, meaning that some construction dates are in future! We will set the age of these properties to 0:
+```{r}
+df3$age[which(df3$age<0)]<-0
+```
+
+<h3> Adding a new column for price/$m^2$ </h3>
+Knowing the price of each square meter of a house may give important information about the average housing prices of a certain district, so we add a column for it:
+```{r}
+df3$price_per_m2 <- df3$price/df3$surface_housing
+View(df3)
+```
+
+## Part 2: Inference & Visualization
+We will examine the data of each column seperately by plotting its data with a proper datagram:
+<ol>
+<li> 
+<h4> Property type and Purchase type </h4>
+We will use a barplot for these columns :
+```{r}
+barplot(table(df3$type_property),col="blue")
+barplot(table(df3$type_purchase),col="red")
+
+```
+
+<li>
+<h4> Parking count and Number of rooms</h4>
+We will use a histogram for these columns :
+```{r}
+hist(df3$parkings_count, xlab = 'Number of Parkings',  main = 'Parking Count Histogram')
+
+hist(df3$rooms_count, main = 'Number of Rooms', xlab = 'rooms')
+```
+<li>
+<h4> Surface housing </h4>
+Histogram for surface area of properties :
+```{r}
+hist(df3$surface_housing, main = 'Surface Housing', xlab = 'Surface Area')
+
+```
+<li>
+<h4> Districts </h4>
+Plot for each of the 9 districts in Lyon :
+```{r}
+barplot(table(df3$district), main = 'Districts')
+```
+<li>
+<h4> Prices per $m^2$ </h4>
+Histogram for price per $m^2$ :
+```{r}
+hist(df3$price_per_m2, main = 'Price per squared meter', xlab = 'Price')
+
+```
+<li>
+<h4> Age </h4>
+Histogram for Age of properties :
+```{r}
+hist(as.numeric(df3$age), main = 'Age', xlab = 'Age')
+
+```
+
+</ol>
+<h3> Deductions from each column </h3>
+The following deductions can be made from the above plots :
+<ol>
+<li>
+Number of ancient properties are much more than number of new properties.
+<li>
+Number of apartments are much more than number of houses.
+<li>
+It seems like the number of rooms of a property has normal distribution with mean about 3.
+<li>
+Most of the properties in Lyon have at most 1 parking.
+<li>
+Surface of properties most probably has normal distribution with mean about 70 squared meters.
+<li>
+District 3 of Lyon has the largest number of properties and therefore, it is probably larger and more crowded than the other districts.
+<li>
+Price per squared meter of properties also has a normal distribution with mean about 4000.
+</ol>
+
+
+
+
+
+
+
+
+### Part 3: Estimation
+The property that we would like to buy should be close to university, as cheap as possible , as large as possible, with at least 3 rooms and one parking. First we see the location of the university in map :
+```{r}
+library(ggforce)
+lat = 45.780234113880425
+l = 4.865561717882041
+
+
+ggplot() +geom_point( data=df, aes(y=latitude, x=longitude, color = as.factor(district)), size = 0.4)+geom_circle(aes(x0 = l, y0 = lat, r = 0.01))
+```
+If we want the property to be close to university, we should either by it from Villeurbanne or district 6. 
+
+```{r}
+houses <-subset(df,(district == "Villeurbanne" | district=="Lyon 6e Arrondissement")  & (rooms_count > 2) & (parkings_count > 0))
+
+```
+Now that we have applied filter for number of rooms and parking and distance, we should consider price and size. For this, let's first normalize the area and the price of the filtered houses:
+```{r}
+normal_prices=houses$price/mean(houses$price)
+normal_area=houses$surface_housing/mean(houses$surface_housing)
+```
+
+Define a score function for each house as $10 \times area - 5 \times price$. Now we compute the score of each filtered house :
+```{r}
+score <-10*normal_area-5*normal_prices
+i=which(score==max(score))
+print(paste(houses$longitude[i], houses$latitude[i]))
+```
+Finally, we select the house with the maximum score and choose an interval around it as our target territory for buying a house :
+```{r}
+i=which(score==max(score))
+long=houses$longitude[i]
+lat=houses$latitude[i]
+ggplot() +geom_point( data=df, aes(y=latitude, x=longitude, color = as.factor(district)), size = 0.4)+geom_circle(aes(x0 = long, y0 = lat, r = 0.005))
+
+```
+
+

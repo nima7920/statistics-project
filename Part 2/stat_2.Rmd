@@ -1,0 +1,339 @@
+---
+title: "stat_2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(rcompanion)
+library(fastR2)
+library(ggplot2)
+library(dplyr)
+library(ggmap)
+library(sjmisc)
+library(cowplot)
+library(Hmisc)
+library(corrplot)
+library(PerformanceAnalytics)
+library(ggpubr)
+library(ggforce)
+library(jsonlite)
+```
+### Lachin Naghashyar - 98110179
+## Part1 (EDA):
+#### first let's view the data in this file:
+```{r}
+data <- read.csv("lyon_housing.csv")
+View(data)
+summary(data)
+```
+### NA and null values
+#### Let's see how many of these values are NA.
+```{r}
+print(paste("total NA cells of: ", sum(is.na(data))))
+colSums(is.na(data))
+```
+#### As we can see, NA values belong to columns surface_effective_usable, latitude and longitude. Also, we don't have null values:
+```{r}
+print(paste("total null cells of: ", sum(is.null(data))))
+```
+#### latitude and longitude have the same number of NAs, lets see if they belong the the same rows:
+```{r}
+if (which(is.na(data$latitude)) == which(is.na(data$longitude))){
+  print("they belong to same rows")
+} else {
+  print("they don't belong to same rows")
+}
+  
+```
+#### for the NA values in surface_effective_usable, we use the corresponding value in surface_housing column. The reason for that is that surface_effective_usable and c have almost the same values and are really close to each other. (We can also drop surface_effective_usable column).
+
+```{r}
+data$surface_effective_usable <- ifelse(is.na(data$surface_effective_usable), data$surface_housing, data$surface_effective_usable)
+```
+#### Also delete the 143 (certainly a small number compairng to 40,516 rows that we have) rows which had NA values.
+```{r}
+data = data[complete.cases(data), ]
+print(paste("total NA cells of: ", sum(is.na(data))))
+```
+### Data types and range of columns
+#### Let's check the data type and range of each column:
+```{r}
+sapply(data, class)
+data.frame(min=sapply(data,min),max=sapply(data,max))
+```
+#### we can see that date_construction includes the unecessary value of 11:38. and we can drop that since the hour of construction is not important. Also note that time is only in two forms of 00:00 and 11:38.
+
+```{r}
+
+data$date_construction <- as.Date(data$date_construction, format = '%y/%m/%d')
+```
+#### Also I changed the data format in data_transaction in the same way.
+```{r}
+data$date_transaction <- as.Date(data$date_transaction, format = '%y/%m/%d')
+```
+#### The other thing about these dates is that some of them are in the future and also are not ancien. These rows should be removed.
+```{r}
+data <- subset(data, !(data$date_transaction > Sys.Date() & data$type_purchase != "VEFA"))
+```
+
+#### we should also delete the ancien ones which their construction data is after their transaction data.
+
+```{r}
+data <- subset(data, !(data$date_transaction - data$date_construction < 0 & data$type_purchase != "VEFA"))
+```
+
+### Distribution of each column
+#### Now let's plot the distribution of each column in this data frame separately.
+```{r}
+
+# my_plots <- lapply(names(data), function(var_x){
+#   p <- ggplot(data) + aes_string(var_x)
+# 
+#   if(is.numeric(data[[var_x]])) {
+#     p <- p + geom_density()
+# 
+#   } else {
+#     p <- p + geom_bar()
+#   } 
+# 
+# })
+# plot_grid(plotlist = my_plots) 
+```
+
+#### the code above might take some time(~2 mintues) to run so I am going to only plot the ones that I find important here. 
+#### Type of puchase seems to be more ancien than VEFA:
+```{r}
+barplot(table(data$type_purchase), col = rgb(0.2, 0.2, 0.3))
+```
+
+#### Also Appartements are by far the popular house type compared to maisons.
+```{r}
+barplot(table(data$type_property), col = rgb(0.8, 0.3, 0.8))
+```
+#### For the room count, 3 bedrooms is the most popular one. Next are the houses with 2, 4, 1, 5 and 6 bedrooms respectively.
+
+```{r}
+hist(data$rooms_count, col = rgb(0.4, 0.1, 0.4))
+```
+#### Also looking at surface_housing and surface_effective_useable, they almost have the same distribution. Let's compute their correlation:
+```{r}
+cor(data$surface_housing, data$surface_effective_usable)
+
+```
+#### Hence they are almost the same and one option is to eliminate one of them from the data frame. 
+
+```{r}
+data <- data %>% select(-surface_effective_usable)
+```
+
+
+#### Looking at the surface trrain, it has an odd distribution:
+
+```{r}
+hist(data$surface_terrain, col = rgb(0.7, 0.7, 0.4))
+```
+#### Almost all of its values are zero. Let's see the percentage of zeros:
+
+```{r}
+percentage = colSums(data==0)/nrow(data)*100
+percentage
+```
+#### It is more than 98 percent so maybe we should drop this column.
+
+```{r}
+data = subset(data, select = -surface_terrain)
+```
+#### Most of the houses have 1 parking or no parking at all.
+
+```{r}
+hist(data$parkings_count, col = rgb(0.5, 0.2, 0.1))
+```
+#### Another important factor is house price:
+```{r}
+hist(data$price, col = rgb(0.1, 0.5, 0.1))
+```
+#### Most of the houses have a price around 250000.
+
+#### For last one, I plot the distribution of districts:
+
+```{r}
+barplot(table(data$district), col = rgb(0.2, 0.3, 0.2))
+```
+#### As you can see, the last district contains almost more then twice the number of houses compared to other districts.
+
+### Add new columns
+
+#### Adding a new column for age, we can add a column showing the age of each house, by finding the differenc between its construction date and current time :
+```{r}
+data$property_age <- data$date_transaction - data$date_construction
+```
+
+
+### Correlation between columns
+
+#### compute the correlation between columns using rcorr function from Hmisc package.
+
+```{r}
+res <- rcorr(as.matrix(data[, c(4, 5, 6, 7)]))
+res
+```
+#### we can see that there is a high (reasonable) correlation between surface_housing and rooms_count (0.84). As well as a high correlation (0.75) between surface_housing and  price.
+
+#### the plot of the correaltions is as follows:
+
+```{r}
+corrplot(res$r, type="upper", order="hclust", 
+          sig.level = 0.01, insig = "blank")
+```
+#### we can also plot a chart for their correlation
+
+```{r}
+my_data <- data[, c(4,5,6,7)]
+chart.Correlation(my_data, histogram=TRUE, pch=19)
+```
+### Use the data from subway stations file
+```{r}
+dfs <- fromJSON('station_coordinates.json')
+dfA <- dfs$A
+dfB <- dfs$B
+dfC <- dfs$D
+dfD <- dfs$D
+dfT1 <- dfs$T1
+dfT2 <- dfs$T2
+dfT3 <- dfs$T3
+dfT4 <- dfs$T4
+dfT5 <- dfs$T5
+dfT6 <- dfs$T6
+dfT7 <- dfs$T7
+
+stations = c()
+lat = c()
+long = c()
+stations_list <- list(dfA, dfB, dfC, dfD, dfT1, dfT2, dfT3, dfT4, dfT5, dfT6, dfT7)
+for (s in stations_list){
+  stations = c(stations, s$stations)
+  lat = c(lat, s$latitudes)
+  long = c(long, s$longitudes)
+}
+
+```
+
+#### then calculate the nearest station for each house and make a new column in data for station_distance
+
+```{r}
+min_distanc <-function(i){
+   stas = c()
+  for (j in (1:length(stations))){
+    distance = distm(c(long[j], lat[j]), c(data[['longitude']][i], data[['latitude']][i]), fun = distHaversine)
+    stas = c(stas, distance)
+  }
+   return(stas)
+}
+```
+
+
+## Part 2
+
+### Check if the price and area have a normal distribution
+#### We plot the histogram of price earlier and it seemed that it might have a normal distribution. Let's also take a look at its density function too.
+
+```{r}
+plot(density(data$price))
+```
+#### To check if it has a normal distribution, we can perform the shapiro test on it. Take the null hypothesis to be that this distribution is normal. Hence, if test is significant, it is not normal. First, take a sample of size 50 and perform the test on them.
+
+```{r}
+set.seed(1000)
+random_sample <- dplyr::sample_n(data, 50)
+plot(density(random_sample$price))
+shapiro.test(random_sample$price)
+```
+
+#### Since the corresponging p-value is higher than 0.05, we can not reject the null hyphothesis. Meaning we can not say price's distribution is not normal and it is normal with the significance level of 95. 
+
+#### Let's do the same for suface area and take a look at its density
+
+```{r}
+plot(density(data$surface_housing))
+```
+#### Similarly, we perform the shapiro test on it. Take the null hypothesis to be that this distribution is normal.
+
+```{r}
+set.seed(1000)
+random_sample <- dplyr::sample_n(data, 50)
+plot(density(random_sample$surface_housing))
+shapiro.test(random_sample$surface_housing)
+```
+
+#### The corresponging p-value is higher than 0.05, we can not reject the null hyphothesis. Meaning we can not say area's distribution is not normal. 
+
+
+
+### Check the correlation between price and surface housing.
+#### We do this first by doing a regression on price and surface_housing 
+```{r}
+reg = lm(price ~ surface_housing, data)
+summary(reg)
+```
+#### we can see that the slope is around 4097 and standard deviation is 18.18.
+#### Knowing that $ I = [\miu - 1.96 \sigma, \miu + 1.96 \sigma]$, we can substitue miu and sigma there and see that $ I = [4061 ,4132] $. Clearly, zero doesn't fall in to this interval and we can be sure that they have a linear relation. Meaning a larger house, costs more (as expected).
+
+```{r}
+ggscatter(data, x = "surface_housing", y = "price", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "surface housing", ylab = "price")
+```
+
+
+### Check if surfacing area has a normal distribution
+
+
+## Part 3: Estimation
+#### The property that we would like to buy should be close to university, as cheap as possible , as large as possible, with at least 3 rooms and one parking. First we see the location of the university in map :
+```{r}
+
+lat = 45.780234113880425
+l = 4.865561717882041
+ggplot() +geom_point( data=data, aes(y=latitude, x=longitude, color = as.factor(district)), size = 0.4)+geom_circle(aes(x0 = l, y0 = lat, r = 0.01))
+```
+
+#### If we want the property to be close to university, we should either buy it in Villeurbanne or district 6. 
+
+```{r}
+houses <-subset(data,(district == "Villeurbanne" | district=="Lyon 6e Arrondissement")  & (rooms_count > 2) & (parkings_count > 0))
+```
+
+#### Now that we have applied filter for number of rooms and parking and distance, we should consider price and size. For this, let's first normalize the area and the price of the filtered houses:
+```{r}
+normal_prices=houses$price/mean(houses$price)
+normal_area=houses$surface_housing/mean(houses$surface_housing)
+```
+
+#### Define a score function for each house as $10 \times area - 5 \times price$. Now we compute the score of each filtered house :
+```{r}
+score <-10*normal_area-5*normal_prices
+i=which(score==max(score))
+print(paste(houses$longitude[i], houses$latitude[i]))
+```
+
+
+#### Finally, we select the house with the maximum score and choose an interval around it as our target territory for buying a house
+```{r}
+i=which(score==max(score))
+long=houses$longitude[i]
+lat=houses$latitude[i]
+ggplot() +geom_point( data=data, aes(y=latitude, x=longitude, color = as.factor(district)), size = 0.4)+geom_circle(aes(x0 = long, y0 = lat, r = 0.005))
+```
+
+
+
+
+
+
+
+
+
+
